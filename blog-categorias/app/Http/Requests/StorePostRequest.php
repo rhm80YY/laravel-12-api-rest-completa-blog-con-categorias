@@ -33,7 +33,9 @@ class StorePostRequest extends FormRequest
             'title'   => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
             'slug'    => ['required', 'string', 'max:100', 'unique:posts,slug'],
-            'status'  => ['sometimes', 'string', 'in:draft,published']
+            'status'  => ['sometimes', 'string', 'in:draft,published'],
+            'category_ids'   => ['sometimes', 'array'],
+            'category_ids.*' => ['exists:categories,id'] // Valida que cada ID exista en la BD
         ];
     }
 }

@@ -10,3 +10,4 @@ use App\Http\Controllers\PostController;
 
 // Puedes verificar las rutas creadas ejecutando php artisan route:list en tu consola.
 Route::apiResource('posts', PostController::class);
+Route::apiResource('categories', CategoryController::class);

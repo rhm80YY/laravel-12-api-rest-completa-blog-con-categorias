@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Http\Requests\StorePostRequest;
+use Illuminate\Support\Arr;
 use App\Http\Requests\UpdatePostRequest;
+// use App\Models\Post;    
 
 class PostController extends Controller
 {
@@ -24,20 +25,26 @@ class PostController extends Controller
      */
     public function store(StorePostRequest $request)
     {
-        // 1. Extraemos SOLO los datos que pasaron las reglas de validación
+        // 1. Extraemos SOLO los datos limpios y validados
         $validatedData = $request->validated();
-        // 2. Aquí irá la lógica para guardar en BD (lo haremos en el Día 3 con Eloquent)
-        // Por ahora, simulamos la creación agregándole un ID falso
-        $newPost = array_merge(['id' => 1], $validatedData);
 
+        // 2. Creamos el Post en la BD
+        // Nota: Eloquent ignora automáticamente 'category_ids' acá porque no está en el $fillable del modelo Post.
+        $post = \App\Models\Post::create($validatedData);
 
-        // Si el codigo llega hasta aqui, la validacion ya paso.
-        // return response()->json(['message' => 'Post validado y listo para crear']);
+        // 3. Si mandaron categorías, las sincronizamos en la tabla pivot
+        if (isset($validatedData['category_ids'])) {
+            // sync() agrega los IDs nuevos y quita los que no estén en el array. ¡Ideal para APIs REST!
+            $post->categories()->sync($validatedData['category_ids']);
+        }
 
-        // 3. Devolvemos respuesta JSON estructurada con código HTTP 201 (Created)
+        // 4. Cargamos la relación para devolverla en el JSON final y evitar el problema N+1
+        $post->load('categories');
+
+        // 5. Respuesta estructurada
         return response()->json([
             'message' => 'Post creado exitosamente',
-            'data'    => $newPost
+            'data'    => $post
         ], 201);
     }
 
