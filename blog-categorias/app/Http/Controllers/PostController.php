@@ -14,9 +14,32 @@ class PostController extends Controller
      * Display a listing of the resource.
      * Mostrar una lista de los recursos
      */
-    public function index()
+    public function index(\Illuminate\Http\Request $request)
     {
-        return response()->json(['message' => 'Lista de todos los posts']);
+        // 1. Iniciamos la query cargando las categorías para evitar N+1
+        $query = \App\Models\Post::with('categories');
+
+        // 2. Filtro por status exacto (ej: ?status=published)
+        if ($request->has('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        // 3. Filtro por búsqueda de texto en el título (ej: ?search=laravel)
+        if ($request->has('search')) {
+            $query->where('title', 'like', '%' . $request->input('search') . '%');
+        }
+
+        // 4. Filtro por categoría usando el slug (ej: ?category=tecnologia)
+        if ($request->has('category')) {
+            $query->whereHas('categories', function ($q) use ($request) {
+                $q->where('slug', $request->input('category'));
+            });
+        }
+
+        // 5. Devolvemos paginación por cursor (10 por página)
+        $posts = $query->cursorPaginate(10);
+
+        return response()->json($posts);
     }
 
     /**
