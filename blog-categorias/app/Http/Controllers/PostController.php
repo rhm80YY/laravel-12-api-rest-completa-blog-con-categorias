@@ -6,10 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePostRequest;
 use Illuminate\Support\Arr;
 use App\Http\Requests\UpdatePostRequest;
-// use App\Models\Post;    
+use App\Http\Resources\PostResource;
+use App\Models\Post;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests; // 1. Importar    
 
 class PostController extends Controller
 {
+
+    use AuthorizesRequests; // <--- 2. AGREGAR ESTA LÍNEA ADENTRO DE LA CLASE
+
     /**
      * Display a listing of the resource.
      * Mostrar una lista de los recursos
@@ -17,7 +22,7 @@ class PostController extends Controller
     public function index(\Illuminate\Http\Request $request)
     {
         // 1. Iniciamos la query cargando las categorías para evitar N+1
-        $query = \App\Models\Post::with('categories');
+        $query = Post::with('categories');
 
         // 2. Filtro por status exacto (ej: ?status=published)
         if ($request->has('status')) {
@@ -36,10 +41,11 @@ class PostController extends Controller
             });
         }
 
-        // 5. Devolvemos paginación por cursor (10 por página)
+       // 5. Devolvemos paginación por cursor (10 por página)
         $posts = $query->cursorPaginate(10);
 
-        return response()->json($posts);
+        // Usamos la collection del Resource (Día 5)
+        return PostResource::collection($posts);
     }
 
     /**
@@ -49,26 +55,46 @@ class PostController extends Controller
     public function store(StorePostRequest $request)
     {
         // 1. Extraemos SOLO los datos limpios y validados
+        // $validatedData = $request->validated();
+
+        // // 2. Creamos el Post en la BD
+        // // Nota: Eloquent ignora automáticamente 'category_ids' acá porque no está en el $fillable del modelo Post.
+        // $post = Post::create($validatedData);
+
+        // // 3. Si mandaron categorías, las sincronizamos en la tabla pivot
+        // if (isset($validatedData['category_ids'])) {
+        //     // sync() agrega los IDs nuevos y quita los que no estén en el array. ¡Ideal para APIs REST!
+        //     $post->categories()->sync($validatedData['category_ids']);
+        // }
+
+        // // 4. Cargamos la relación para devolverla en el JSON final y evitar el problema N+1
+        // $post->load('categories');
+
+        // // 5. Respuesta estructurada
+        // // return response()->json([
+        // //     'message' => 'Post creado exitosamente',
+        // //     'data'    => $post
+        // // ], 201);
+        // // 5. Respuesta estructurada
+        // return new PostResource($post);
+
+
         $validatedData = $request->validated();
 
-        // 2. Creamos el Post en la BD
-        // Nota: Eloquent ignora automáticamente 'category_ids' acá porque no está en el $fillable del modelo Post.
-        $post = \App\Models\Post::create($validatedData);
-
-        // 3. Si mandaron categorías, las sincronizamos en la tabla pivot
+        // 2. Creamos el Post vinculado al usuario autenticado (Sanctum)
+        // Esto llena automáticamente el 'user_id' en la tabla posts.
+        $post = $request->user()->posts()->create($validatedData); 
+        // 3. Sincronizamos categorías (M2M) [cite: 30]
         if (isset($validatedData['category_ids'])) {
-            // sync() agrega los IDs nuevos y quita los que no estén en el array. ¡Ideal para APIs REST!
             $post->categories()->sync($validatedData['category_ids']);
         }
 
-        // 4. Cargamos la relación para devolverla en el JSON final y evitar el problema N+1
+        // 4. Eager loading para evitar N+1
         $post->load('categories');
 
-        // 5. Respuesta estructurada
-        return response()->json([
-            'message' => 'Post creado exitosamente',
-            'data'    => $post
-        ], 201);
+        // 5. Respuesta profesional con Resource 
+        // return new PostResource($post);
+        return new PostResource($post->load('categories'));
     }
 
     /**
@@ -77,25 +103,32 @@ class PostController extends Controller
      */
     public function show(string $id)
     {
-        return response()->json(['message' => "Detalle del post {$id}"]);
+        // return response()->json(['message' => "Detalle del post {$id}"]);
+        // 1. Buscamos el post con sus categorías. 
+        // findOrFail() es la clave: si el ID 99999 no existe, "explota" y lanza un error 404.
+        $post = Post::with('categories')->findOrFail($id);
+        
+        // 2. Si lo encuentra, lo devolvemos transformado con el Resource
+        return new PostResource($post);
     }
 
     /**
      * Update the specified resource in storage.
      * Actualizar el recurso especificado en el almacenamiento.
      */
-    public function update(UpdatePostRequest $request, string $id)
+    
+    public function update(UpdatePostRequest $request, Post $post)
     {
-        // Validado para actualizar
-        // return response()->json(['message' => 'Post validado y listo para actualizar']);
+        // 3. AHORA ESTO YA NO DARÁ ERROR
+        $this->authorize('update', $post); 
 
-        // Igual que en store, solo tomamos data limpia
-        $validatedData = $request->validated();
-        return response()->json([
-            'message' => "Post {$id} actualizado",
-            'data'    => $validatedData
-        ]);
+        $post->update($request->validated());
 
+        if (isset($request->validated()['category_ids'])) {
+            $post->categories()->sync($request->validated()['category_ids']);
+        }
+
+        return new PostResource($post->load('categories'));
     }
 
     /**
