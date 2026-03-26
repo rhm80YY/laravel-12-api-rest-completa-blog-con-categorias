@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -31,7 +32,8 @@ class AuthController extends Controller
         ]);
 
         // 3. Generamos el token de Sanctum (Día 6)
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token', ['posts:read', 'posts:write'])->plainTextToken;
 
         // 4. Devolvemos el usuario y el token
         return response()->json([
@@ -63,7 +65,8 @@ class AuthController extends Controller
         }
 
         // Generamos un nuevo token
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token', ['posts:read', 'posts:write'])->plainTextToken;
 
         return response()->json([
             'message' => 'Login exitoso',
